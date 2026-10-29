@@ -1,0 +1,979 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Jantar Mantar Chalo</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bungee&family=Hind:wght@500;700&display=swap">
+<style>
+/* Layout: full-screen canvas game over a street map of Connaught Place to Jantar Mantar; cream chunky HUD chips; cream placard cards for menus. Single deliberate look. */
+:root {
+  --olive: #5b6b2e; --olive-deep: #3e4a1d; --ink: #262d12;
+  --cream: #f6efd9; --cream-2: #ece2c2; --brown: #8a5a2b; --mustard: #e3b23c; --red: #b5432d; --go: #6f9a2a;
+  --display: "Bungee", "Arial Black", Impact, sans-serif;
+  --body: "Hind", "Segoe UI", system-ui, sans-serif;
+  color-scheme: light;
+}
+* { box-sizing: border-box }
+[hidden] { display: none !important }
+html, body { height: 100% }
+body { background: var(--ink); color: var(--ink); font: 500 16px/1.45 var(--body); overflow: hidden; -webkit-user-select: none; user-select: none }
+#app { position: fixed; inset: 0 }
+canvas { display: block; width: 100%; height: 100%; touch-action: none; outline: none }
+.hud {
+  position: absolute; top: 0; left: 0; right: 0; display: flex; flex-wrap: wrap; gap: 8px; align-items: center; pointer-events: none;
+  padding-top: calc(10px + env(safe-area-inset-top, 0px));
+  padding-left: max(12px, env(safe-area-inset-left, 0px)); padding-right: max(12px, env(safe-area-inset-right, 0px));
+}
+.chip {
+  background: var(--cream); border: 3px solid var(--ink); border-radius: 999px; padding: 5px 12px;
+  font: 700 15px/1.2 var(--body); box-shadow: 3px 3px 0 var(--ink); font-variant-numeric: tabular-nums; white-space: nowrap;
+}
+.chip.status { background: var(--olive-deep); color: var(--cream); white-space: normal; min-width: 0 }
+.chip.status.hot { background: var(--mustard); color: var(--ink) }
+.chip.status.alarm { background: var(--red); color: var(--cream) }
+.stam { display: flex; align-items: center; gap: 8px }
+.stam span { width: 70px; height: 10px; border: 2px solid var(--ink); border-radius: 99px; background: var(--cream-2); overflow: hidden }
+.stam i { display: block; height: 100%; background: var(--go); width: 100% }
+.spacer { flex: 1 }
+.ibtn { pointer-events: auto; cursor: pointer; font: 700 13px/1 var(--body); letter-spacing: .06em; text-transform: uppercase; color: var(--ink) }
+.ibtn:active { transform: translate(3px,3px); box-shadow: 0 0 0 var(--ink) }
+:focus-visible { outline: 3px solid var(--mustard); outline-offset: 3px }
+
+.touch {
+  position: absolute; display: flex; gap: 12px; align-items: flex-end;
+  right: calc(16px + env(safe-area-inset-right, 0px)); bottom: calc(18px + env(safe-area-inset-bottom, 0px));
+}
+.tbtn {
+  width: 76px; height: 76px; border-radius: 50%; border: 4px solid var(--ink); box-shadow: 4px 4px 0 var(--ink);
+  font: 400 14px/1 var(--display); background: var(--mustard); color: var(--ink); touch-action: none; padding: 0;
+}
+.tbtn.big { width: 90px; height: 90px; font-size: 16px }
+.tbtn.alt { background: var(--cream) }
+.tbtn:active, .tbtn.on { transform: translate(4px,4px); box-shadow: 0 0 0 var(--ink) }
+
+.screen {
+  position: absolute; inset: 0; display: grid; place-items: center; background: rgba(38,45,18,.55); overflow: auto;
+  padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px));
+  padding-block: calc(16px + env(safe-area-inset-top, 0px)) calc(16px + env(safe-area-inset-bottom, 0px));
+}
+.card {
+  background: var(--cream); border: 4px solid var(--ink); border-radius: 18px; box-shadow: 8px 8px 0 var(--ink);
+  width: 100%; max-width: 620px; padding: clamp(18px, 4vw, 28px); display: grid; gap: 14px;
+}
+.card h1 {
+  margin: 0; font: 400 clamp(32px, 7.5vw, 52px)/.95 var(--display); color: var(--olive); text-wrap: balance;
+  text-shadow: 3px 3px 0 var(--ink);
+}
+.card h1 em { font-style: normal; color: var(--mustard); display: inline-block; transform: rotate(-3deg) }
+.card h3 { margin: 0; font: 400 17px/1.1 var(--display); color: var(--brown) }
+.card p { margin: 0 }
+.tag { font-weight: 700; color: var(--brown) }
+.modes { display: grid; grid-template-columns: repeat(2, minmax(0,1fr)); gap: 12px }
+.mode { border: 3px solid var(--ink); border-radius: 14px; padding: 12px; display: grid; gap: 8px; align-content: start; background: #fff9e8; min-width: 0 }
+.mode.p { background: #efe2c4 }
+.keys { display: grid; gap: 4px; margin: 0; padding: 0; list-style: none; font-size: 14px; line-height: 1.35 }
+kbd { font: 700 11px/1 var(--body); background: #fff9e8; border: 2px solid var(--ink); border-bottom-width: 3px; border-radius: 5px; padding: 2px 5px; white-space: nowrap }
+.btn {
+  justify-self: start; cursor: pointer; font: 400 18px/1 var(--display); padding: 14px 22px; border-radius: 999px;
+  border: 3px solid var(--ink); background: var(--mustard); color: var(--ink); box-shadow: 4px 4px 0 var(--ink);
+}
+.btn:active { transform: translate(4px,4px); box-shadow: 0 0 0 var(--ink) }
+.btn.alt { background: var(--cream-2); color: var(--brown); font-size: 15px; padding: 11px 18px }
+.btn.cop { background: var(--brown); color: var(--cream) }
+.row { display: flex; flex-wrap: wrap; gap: 12px; align-items: center }
+.fine { font-size: 13px; color: #6b6146 }
+@media (max-width: 560px) { .modes { grid-template-columns: minmax(0,1fr) } .stam span { width: 46px } }
+</style>
+</head>
+<body>
+
+<div id="app">
+  <canvas id="cv" tabindex="0" aria-label="Jantar Mantar Chalo game field"></canvas>
+  <div class="hud">
+    <span class="chip" id="hRound">Round 1</span>
+    <span class="chip" id="hKafila">Kafila 0/6</span>
+    <span class="chip" id="hThird">Chances ●●●</span>
+    <span class="chip stam">Dum <span><i id="hStam"></i></span></span>
+    <span class="chip status" id="hStatus">Recruit marchers</span>
+    <span class="spacer"></span>
+    <button class="chip ibtn" id="bSound" type="button">Sound on</button>
+    <button class="chip ibtn" id="bPause" type="button">Pause</button>
+  </div>
+  <div class="touch" id="touch" hidden>
+    <button class="tbtn alt" id="bSprint" type="button">BHAGO</button>
+    <button class="tbtn alt" id="bB" type="button" hidden>ROKO</button>
+    <button class="tbtn big" id="bA" type="button">NARA!</button>
+  </div>
+  <div class="screen" id="screen"><div class="card" id="card"></div></div>
+</div>
+
+<script>
+(() => {
+'use strict';
+const TAU = Math.PI * 2, INK = '#262d12', CREAM = '#f6efd9';
+const W = 2400, H = 1900;
+const $ = id => document.getElementById(id);
+const cv = $('cv'), c = cv.getContext('2d');
+const rand = (a, b) => a + Math.random() * (b - a);
+const pick = a => a[Math.random() * a.length | 0];
+const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+const dist = (a, b) => Math.hypot(a.x - b.x, a.y - b.y);
+const inRect = (p, r, m = 0) => p.x > r.x - m && p.x < r.x + r.w + m && p.y > r.y - m && p.y < r.y + r.h + m;
+const store = { get(k) { try { return localStorage.getItem('jmc_' + k) } catch (e) { return null } }, set(k, v) { try { localStorage.setItem('jmc_' + k, v) } catch (e) {} } };
+
+// ---------- map: Connaught Place (north) down to Jantar Mantar on Sansad Marg ----------
+const CPc = { x: 1250, y: 330 }, CP_IN = 150, CP_OUT = 300;
+const cpPt = (deg, r = CP_OUT) => [CPc.x + r * Math.cos(deg * Math.PI / 180), CPc.y + r * Math.sin(deg * Math.PI / 180)];
+const ROADS = [
+  { name: 'SANSAD MARG', w: 64, pts: [cpPt(100), [1080, 1900]] },
+  { name: 'JANPATH', w: 60, pts: [cpPt(75), [1560, 1900]] },
+  { name: 'BABA KHARAK SINGH MARG', w: 56, pts: [cpPt(125), [150, 1350]] },
+  { name: 'KASTURBA GANDHI MARG', w: 56, pts: [cpPt(55), [2250, 1900]] },
+  { name: 'BARAKHAMBA ROAD', w: 50, pts: [cpPt(15), [2400, 560]] },
+  { name: 'MINTO ROAD', w: 50, pts: [cpPt(200), [0, 180]] },
+  { name: 'TOLSTOY MARG', w: 46, pts: [[1165, 980], [1388, 950], [1637, 920], [2400, 880]] },
+  { name: 'JANTAR MANTAR ROAD', w: 96, pts: [[1150, 1290], [520, 1290], [180, 1430]] },
+  { name: 'ASHOKA ROAD', w: 56, pts: [[0, 1760], [1108, 1600], [1524, 1700], [2400, 1840]] }
+];
+const SEGS = [];
+ROADS.forEach(r => { for (let i = 0; i < r.pts.length - 1; i++) SEGS.push({ a: r.pts[i], b: r.pts[i + 1], w: r.w, r }) });
+[100, 75, 125, 55, 15, 200, -20, -60, -100, -140, 160].forEach(d => SEGS.push({ a: cpPt(d, CP_IN), b: cpPt(d, CP_OUT), w: 30, spoke: true }));
+const RINGS = [{ r: CP_IN, w: 36 }, { r: CP_OUT, w: 56 }];
+function segInfo(px, py, a, b) {
+  const vx = b[0] - a[0], vy = b[1] - a[1], l2 = vx * vx + vy * vy;
+  const t = clamp(((px - a[0]) * vx + (py - a[1]) * vy) / l2, 0, 1), cx = a[0] + vx * t, cy = a[1] + vy * t;
+  return { d: Math.hypot(px - cx, py - cy), cx, cy, t };
+}
+const onRoad = (x, y, m = 0) => SEGS.some(s => segInfo(x, y, s.a, s.b).d < s.w / 2 + m) || RINGS.some(r => Math.abs(Math.hypot(x - CPc.x, y - CPc.y) - r.r) < r.w / 2 + m);
+const COMPOUND = { x: 760, y: 1015, w: 345, h: 222 };
+const ZONE = { x: 640, y: 1246, w: 470, h: 92 };
+const START = { x: 1250, y: 400 };
+const COP_HQ = { x: 1180, y: 1150 };
+const STALLS = [{ x: 1000, y: 780 }, { x: 1280, y: 1150 }, { x: 1600, y: 1150 }, { x: 400, y: 900 }, { x: 800, y: 1520 }, { x: 1300, y: 1520 }, { x: 2000, y: 1300 }, { x: 1750, y: 620 }];
+const TEMPLE = { x: 800, y: 915 };
+const TENTS = [700, 810, 920, 1030].map(x => ({ x, y: 1372 }));
+const SAFE_R = 70, DHARNA_T = 10;
+const nearCP = (x, y) => { const d = Math.hypot(x - CPc.x, y - CPc.y); return d > 125 && d < 440 };
+const blocked = (x, y, m = 0) => inRect({ x, y }, COMPOUND, m) || inRect({ x, y }, ZONE, m) || nearCP(x, y);
+
+function seeded(s) { return () => { s |= 0; s = s + 0x6D2B79F5 | 0; let t = Math.imul(s ^ s >>> 15, 1 | s); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296 } }
+const HOUSES = [{ x: 540, y: 1400, w: 120, h: 70, name: 'KERALA HOUSE' }];
+{ const r = seeded(5); for (let i = 0; i < 500 && HOUSES.length < 18; i++) {
+  const w = 80 + r() * 50, h = 56 + r() * 26, x = 20 + r() * (W - w - 40), y = 20 + r() * (H - h - 40);
+  const pts = [[x, y], [x + w, y], [x, y + h], [x + w, y + h], [x + w / 2, y + h / 2]];
+  if (pts.some(([px, py]) => onRoad(px, py, 26) || blocked(px, py, 40) || STALLS.some(s => Math.hypot(px - s.x, py - s.y) < 110) || Math.hypot(px - TEMPLE.x, py - TEMPLE.y) < 90)) continue;
+  if (HOUSES.some(o => x < o.x + o.w + 40 && x + w + 40 > o.x && y < o.y + o.h + 40 && y + h + 40 > o.y)) continue;
+  HOUSES.push({ x, y, w, h });
+} }
+const inHouse = (x, y, m) => HOUSES.some(o => inRect({ x, y }, o, m));
+const TREES = [];
+{ const r = seeded(11);
+  const ok = (x, y) => x > 20 && x < W - 20 && y > 30 && y < H - 10 && !onRoad(x, y, 12) && !blocked(x, y, 24) && !inHouse(x, y, 16) && Math.hypot(x - CPc.x, y - CPc.y) > 110 &&
+    !STALLS.some(s => Math.hypot(x - s.x, y - s.y) < 95) && Math.hypot(x - TEMPLE.x, y - TEMPLE.y) > 70 && !TENTS.some(t => Math.abs(x - t.x) < 60 && Math.abs(y - t.y) < 50);
+  SEGS.filter(s => !s.spoke).forEach(s => {
+    const vx = s.b[0] - s.a[0], vy = s.b[1] - s.a[1], len = Math.hypot(vx, vy), n = Math.floor(len / 90);
+    for (let i = 0; i < n; i++) for (const side of [-1, 1]) {
+      const t = (i + .5) / n, x = s.a[0] + vx * t - vy / len * side * (s.w / 2 + 26), y = s.a[1] + vy * t + vx / len * side * (s.w / 2 + 26);
+      if (ok(x, y)) TREES.push({ x, y, r: 15 + r() * 6 });
+    }
+  });
+  for (let i = 0; i < 400 && TREES.length < 260; i++) { const x = r() * W, y = r() * H; if (ok(x, y) && !TREES.some(t => Math.hypot(t.x - x, t.y - y) < 40)) TREES.push({ x, y, r: 16 + r() * 10 }) }
+}
+
+// ---------- looks ----------
+const SKINS = ['#8d5a3b', '#a86b45', '#c58a5c', '#6e4329', '#b9784f', '#7c4a2c'];
+const TOPS = ['#e3b23c', '#f6efd9', '#4f7a8a', '#b5432d', '#7a5c9e', '#d77a3a', '#3e6b48', '#e8d6a8', '#c45c7a'];
+const BOTS = ['#3b3a36', '#f6efd9', '#5a4a3a', '#2f3f5a'];
+const HAIR = ['#1f1a12', '#2a2414', '#3a2a1a'];
+function randLook() {
+  const t = pick(['student', 'student', 'farmer', 'farmer', 'auntie', 'uncle', 'worker']);
+  const L = { skin: pick(SKINS), hair: pick(HAIR), top: pick(TOPS), bottom: pick(BOTS), hat: 'none' };
+  if (t === 'student') { L.hat = Math.random() < .4 ? 'cap' : 'none'; L.hc = pick(TOPS); L.bag = true; L.bottom = '#2f3f5a' }
+  if (t === 'farmer') { L.hat = 'pagdi'; L.hc = pick(['#e3b23c', '#f6efd9', '#d77a3a', '#6f9a2a', '#b5432d']); L.bottom = CREAM; L.mus = Math.random() < .7; L.top = pick(['#f6efd9', '#e8d6a8', '#4f7a8a']) }
+  if (t === 'auntie') { L.hat = 'dupatta'; L.hc = pick(['#b5432d', '#7a5c9e', '#e3b23c', '#d77a3a', '#c45c7a']); L.skirt = true; L.bottom = pick(['#7a5c9e', '#3e6b48', '#b5432d', '#e3b23c']) }
+  if (t === 'uncle') { L.hat = 'topi'; L.top = CREAM; L.bottom = CREAM; L.mus = true; L.hair = '#8a8a8a' }
+  if (t === 'worker') { L.hat = 'band'; L.hc = '#b5432d' }
+  return L;
+}
+const LEADER = { skin: '#a86b45', hair: '#1f1a12', top: '#5b6b2e', bottom: CREAM, hat: 'band', hc: '#e3b23c' };
+const SHO = { skin: '#8d5a3b', hair: '#1f1a12', top: '#a88a4c', bottom: '#8a7444', hat: 'police', mus: true, belt: true };
+const copLook = () => ({ skin: pick(SKINS), hair: '#1f1a12', top: '#b8a06a', bottom: '#9c8455', hat: 'police', mus: true, belt: true });
+const SIGNS = ['ZINDABAD', 'INQUILAB!', 'HUM DEKHENGE', 'HAQ DO', 'JAWAB DO', 'CHALO JM', 'BAS KARO', 'AWAAZ DO'];
+const SLOGANS = ['Inquilab Zindabad!', 'Hum dekhenge!', 'Chalo Jantar Mantar!', 'Awaaz do!', 'Haq hamara!', 'Zindabad!', 'Jawab do!'];
+const JOIN = ['Main bhi chalunga!', 'Ruko, aa rahi hoon!', 'Chalo!', 'Saath hain!', 'Chai baad mein!'];
+const COP_LINES = ['Ruko!', 'Chalo, hatao!', 'Permission hai?', 'Section 144!', 'Oye!'];
+const CAUGHT = ['Arre yaar!', 'Chhodo!', 'Phir milenge!', 'Bus mein?!'];
+const FLAGS = ['#e3b23c', '#b5432d', '#6f9a2a', '#f6efd9'];
+
+// ---------- drawing ----------
+function rr(x, y, w, h, r) { c.beginPath(); c.roundRect ? c.roundRect(x, y, w, h, r) : c.rect(x, y, w, h) }
+function line(x1, y1, x2, y2) { c.beginPath(); c.moveTo(x1, y1); c.lineTo(x2, y2); c.stroke() }
+function circ(x, y, r) { c.beginPath(); c.arc(x, y, r, 0, TAU) }
+function limb(x1, y1, x2, y2, col, skin) {
+  c.strokeStyle = INK; c.lineWidth = 5.5; line(x1, y1, x2, y2);
+  c.strokeStyle = col; c.lineWidth = 3.2; line(x1, y1, x2, y2);
+  c.fillStyle = skin; circ(x2, y2, 2.5); c.fill();
+}
+function leg(x1, y1, x2, y2, col) {
+  c.strokeStyle = INK; c.lineWidth = 6; line(x1, y1, x2, y2);
+  c.strokeStyle = col; c.lineWidth = 3.6; line(x1, y1, x2, y2);
+  c.fillStyle = INK; c.beginPath(); c.ellipse(x2 + 1, y2, 3, 1.7, 0, 0, TAU); c.fill();
+}
+function hat(L, x, hy, f, s) {
+  c.lineWidth = 2; c.strokeStyle = INK;
+  if (L.hat === 'pagdi') {
+    c.fillStyle = L.hc; c.beginPath(); c.ellipse(x, hy - 4.5, 9.5, 5.5, 0, 0, TAU); c.fill(); c.stroke();
+    c.beginPath(); c.ellipse(x - f * 2, hy - 8.5, 5.5, 3.6, 0, 0, TAU); c.fill(); c.stroke();
+    c.lineWidth = 1.2; c.beginPath(); c.moveTo(x - 8, hy - 2.5); c.quadraticCurveTo(x, hy - 8, x + 8, hy - 5); c.stroke();
+  } else if (L.hat === 'topi') {
+    c.fillStyle = CREAM; c.beginPath(); c.moveTo(x - 7.5, hy - 4); c.lineTo(x + 7.5, hy - 4); c.lineTo(x + 5, hy - 10); c.lineTo(x - 5, hy - 10); c.closePath(); c.fill(); c.stroke();
+  } else if (L.hat === 'police') {
+    c.fillStyle = '#b8a06a'; c.beginPath(); c.ellipse(x, hy - 8.5, 9, 3.8, 0, 0, TAU); c.fill(); c.stroke();
+    c.fillStyle = '#b5432d'; c.fillRect(x - 7.5, hy - 7.5, 15, 3.8); c.lineWidth = 1.5; c.strokeRect(x - 7.5, hy - 7.5, 15, 3.8);
+    c.lineWidth = 3; line(x + f * 2, hy - 3.5, x + f * 11, hy - 2.5);
+  } else if (L.hat === 'cap') {
+    c.fillStyle = L.hc; c.beginPath(); c.arc(x, hy - 1, 8, Math.PI, TAU); c.closePath(); c.fill(); c.stroke();
+    c.strokeStyle = L.hc; c.lineWidth = 3; line(x + f * 4, hy - 1.5, x + f * 12, hy - 1);
+  } else if (L.hat === 'band') {
+    c.fillStyle = L.hc; c.fillRect(x - 7.5, hy - 5, 15, 3.2);
+    c.strokeStyle = L.hc; c.lineWidth = 2.2; line(x - f * 7, hy - 4, x - f * 14, hy - 1 + s * 2); line(x - f * 7, hy - 3, x - f * 12, hy + 3 + s * 2);
+  } else if (L.hat === 'dupatta') {
+    c.strokeStyle = INK; c.lineWidth = 7; c.beginPath(); c.arc(x, hy, 9, Math.PI * .85, Math.PI * 2.15); c.stroke();
+    c.strokeStyle = L.hc; c.lineWidth = 4.5; c.beginPath(); c.arc(x, hy, 9, Math.PI * .85, Math.PI * 2.15); c.stroke();
+    c.lineWidth = 4.5; line(x - f * 8, hy + 4, x - f * 10 + s, hy + 22);
+  }
+}
+function item(kind, hx, hy, f, s, o) {
+  if (kind === 'placard') {
+    c.strokeStyle = '#6b4423'; c.lineWidth = 2.6; line(hx, hy + 3, hx, hy - 27);
+    const bx = hx + f * 2, by = hy - 34;
+    c.fillStyle = CREAM; rr(bx - 17, by - 8, 34, 15, 2); c.fill(); c.strokeStyle = INK; c.lineWidth = 2; c.stroke();
+    c.fillStyle = o.sc || '#b5432d'; c.font = '700 7.5px Hind, sans-serif'; c.textAlign = 'center'; c.textBaseline = 'middle';
+    c.fillText(o.sign || 'ZINDABAD', bx, by, 30);
+  } else if (kind === 'flag') {
+    const top = hy - 32; c.strokeStyle = '#6b4423'; c.lineWidth = 2.6; line(hx, hy + 3, hx, top);
+    c.fillStyle = o.fc || '#e3b23c'; c.beginPath(); c.moveTo(hx, top); c.lineTo(hx + f * 18, top + 2 + s * 1.5); c.lineTo(hx + f * 18, top + 12 + s * 1.5); c.lineTo(hx, top + 11); c.closePath();
+    c.fill(); c.strokeStyle = INK; c.lineWidth = 2; c.stroke();
+  } else if (kind === 'megaphone') {
+    c.fillStyle = '#e3b23c'; c.beginPath(); c.moveTo(hx - f * 2, hy - 2); c.lineTo(hx + f * 12, hy - 8); c.lineTo(hx + f * 12, hy + 5); c.lineTo(hx - f * 2, hy + 2); c.closePath();
+    c.fill(); c.strokeStyle = INK; c.lineWidth = 2; c.stroke();
+  } else if (kind === 'lathi') {
+    c.strokeStyle = INK; c.lineWidth = 4.5; line(hx - f * 3, hy + 9, hx + f * 9, hy - 17);
+    c.strokeStyle = '#8a5a2b'; c.lineWidth = 2.6; line(hx - f * 3, hy + 9, hx + f * 9, hy - 17);
+  }
+}
+function person(e, L, o = {}) {
+  const x = e.x + (o.jit || 0), y = e.y, f = e.face || 1, s = e.moving ? Math.sin(e.phase) : 0, sit = o.sit;
+  c.lineCap = 'round'; c.lineJoin = 'round';
+  c.fillStyle = 'rgba(38,45,18,.3)'; c.beginPath(); c.ellipse(x, y, 11, 4, 0, 0, TAU); c.fill();
+  const hip = sit ? y - 5 : y - 14 - Math.abs(s);
+  if (sit) { c.fillStyle = L.bottom; c.beginPath(); c.ellipse(x, y - 3, 11, 4.5, 0, 0, TAU); c.fill(); c.strokeStyle = INK; c.lineWidth = 2; c.stroke() }
+  else if (L.skirt) { c.fillStyle = L.bottom; c.beginPath(); c.moveTo(x - 6, hip); c.lineTo(x + 6, hip); c.lineTo(x + 8 + s * 2, y - 1); c.lineTo(x - 8 + s * 2, y - 1); c.closePath(); c.fill(); c.strokeStyle = INK; c.lineWidth = 2; c.stroke() }
+  else { leg(x - 3, hip, x - 3 + s * 5, y - 1, L.bottom); leg(x + 3, hip, x + 3 - s * 5, y - 1, L.bottom) }
+  const bt = hip - 15, hy = bt - 7;
+  if (L.bag) { c.fillStyle = '#4f7a8a'; rr(x - f * 8 - 4, bt + 2, 8, 11, 3); c.fill(); c.strokeStyle = INK; c.lineWidth = 2; c.stroke() }
+  limb(x - f * 5, bt + 4, x - f * 7 + s * 3, bt + 13, L.top, L.skin);
+  c.fillStyle = L.top; rr(x - 7, bt, 14, 16, 5); c.fill(); c.strokeStyle = INK; c.lineWidth = 2; c.stroke();
+  if (L.belt) { c.fillStyle = '#5e3a17'; c.fillRect(x - 6, bt + 10.5, 12, 3) }
+  c.fillStyle = L.skin; circ(x, hy, 7.5); c.fill();
+  c.fillStyle = L.hair; c.beginPath(); c.arc(x, hy, 7.5, Math.PI, TAU); c.closePath(); c.fill();
+  c.strokeStyle = INK; c.lineWidth = 2; circ(x, hy, 7.5); c.stroke();
+  c.fillStyle = INK; circ(x + f * 3.2, hy + .5, 1.3); c.fill();
+  if (L.mus) { c.lineWidth = 2; line(x + f * 1.5, hy + 3.6, x + f * 6, hy + 3.6) }
+  hat(L, x, hy, f, s);
+  const k = o.item; let hx = x + f * 9, hh = bt + 13 - s * 3;
+  if (k === 'placard' || k === 'flag') { hx = x + f * 10; hh = bt + 1 + (sit ? 0 : s) }
+  if (k === 'megaphone') { hx = x + f * 9; hh = hy + 3 }
+  if (k === 'lathi') { hh = bt + 9 }
+  if (o.grab) { hx = x + f * 13; hh = bt + 4 }
+  limb(x + f * 5, bt + 4, hx, hh, L.top, L.skin);
+  if (k && !o.grab) item(k, hx, hh, f, s, o);
+}
+function bubble(x, y, text) {
+  c.font = '700 12px Hind, sans-serif'; c.textAlign = 'center'; c.textBaseline = 'middle';
+  const w = c.measureText(text).width + 14, h = 20, bx = x - w / 2, by = y - h;
+  c.fillStyle = CREAM; rr(bx, by, w, h, 7); c.fill(); c.strokeStyle = INK; c.lineWidth = 2; c.stroke();
+  c.beginPath(); c.moveTo(x - 4, by + h - 1); c.lineTo(x, by + h + 6); c.lineTo(x + 4, by + h - 1); c.fill(); c.stroke();
+  c.fillStyle = CREAM; c.fillRect(x - 3, by + h - 3, 6, 3);
+  c.fillStyle = INK; c.fillText(text, x, by + h / 2 + 1);
+}
+function marker(x, y, col) {
+  const by = y - 58 + Math.sin(G.t * 5) * 2.5;
+  c.fillStyle = col; c.strokeStyle = INK; c.lineWidth = 2; c.beginPath(); c.moveTo(x - 7, by - 9); c.lineTo(x + 7, by - 9); c.lineTo(x, by); c.closePath(); c.fill(); c.stroke();
+}
+function tree(t) {
+  const { x, y, r } = t;
+  c.fillStyle = 'rgba(38,45,18,.3)'; c.beginPath(); c.ellipse(x, y, r * .9, r * .35, 0, 0, TAU); c.fill();
+  c.fillStyle = '#6b4423'; c.fillRect(x - 3, y - r, 6, r); c.strokeStyle = INK; c.lineWidth = 2; c.strokeRect(x - 3, y - r, 6, r);
+  const blobs = [[-r * .45, -r * 1.2, r * .62, '#4d5e25'], [r * .45, -r * 1.15, r * .6, '#5f7330'], [0, -r * 1.65, r * .7, '#71873a']];
+  c.fillStyle = INK; blobs.forEach(([dx, dy, rad]) => { circ(x + dx, y + dy, rad + 2.5); c.fill() });
+  blobs.forEach(([dx, dy, rad, col]) => { c.fillStyle = col; circ(x + dx, y + dy, rad); c.fill() });
+  c.fillStyle = 'rgba(246,239,217,.18)'; circ(x - r * .2, y - r * 1.85, r * .25); c.fill();
+}
+const WALLAH = { skin: '#8d5a3b', hair: '#2a2414', top: '#f6efd9', bottom: '#5a4a3a', hat: 'band', hc: '#b5432d', mus: true };
+function stall(s, t) {
+  const { x, y } = s;
+  person({ x: x + 28, y: y - 2, face: -1, moving: false, phase: 0 }, WALLAH);
+  c.fillStyle = 'rgba(38,45,18,.3)'; c.beginPath(); c.ellipse(x, y, 26, 6, 0, 0, TAU); c.fill();
+  c.strokeStyle = '#6b4423'; c.lineWidth = 3; line(x - 20, y - 18, x - 20, y - 50); line(x + 20, y - 18, x + 20, y - 50);
+  c.fillStyle = '#8a5a2b'; rr(x - 23, y - 24, 46, 18, 3); c.fill(); c.strokeStyle = INK; c.lineWidth = 2; c.stroke();
+  c.fillStyle = INK; circ(x - 14, y - 4, 5); c.fill(); circ(x + 14, y - 4, 5); c.fill();
+  c.fillStyle = '#e3b23c'; circ(x - 8, y - 29, 5); c.fill(); c.stroke();
+  for (let i = 0; i < 6; i++) { c.fillStyle = i % 2 ? CREAM : '#e3b23c'; c.fillRect(x - 27 + i * 9, y - 60, 9, 11) }
+  c.strokeRect(x - 27, y - 60, 54, 11);
+  c.fillStyle = INK; c.font = '700 8px Hind, sans-serif'; c.textAlign = 'center'; c.textBaseline = 'middle'; c.fillText('CHAI ₹10', x + 6, y - 15);
+  c.strokeStyle = 'rgba(246,239,217,.7)'; c.lineWidth = 1.5; c.beginPath();
+  for (let i = 0; i < 12; i++) c.lineTo(x - 8 + Math.sin(t * 3 + i * .6) * 2.5, y - 36 - i * 1.5); c.stroke();
+}
+function barricade(b) {
+  const mx = (b.a.x + b.b.x) / 2, my = (b.a.y + b.b.y) / 2, len = Math.hypot(b.b.x - b.a.x, b.b.y - b.a.y), ang = Math.atan2(b.b.y - b.a.y, b.b.x - b.a.x);
+  c.save(); c.translate(mx, my); c.rotate(ang);
+  c.fillStyle = 'rgba(38,45,18,.3)'; c.fillRect(-len / 2 + 3, -4, len, 14);
+  rr(-len / 2, -7, len, 14, 3); c.save(); c.clip(); c.fillStyle = '#e3b23c'; c.fillRect(-len / 2, -7, len, 14);
+  c.strokeStyle = INK; c.lineWidth = 5; for (let i = -len / 2 - 14; i < len / 2 + 14; i += 14) line(i, 9, i + 18, -9);
+  c.restore(); c.strokeStyle = INK; c.lineWidth = 2.5; rr(-len / 2, -7, len, 14, 3); c.stroke();
+  c.restore();
+}
+function monument() {
+  c.strokeStyle = INK; c.lineWidth = 2.5; c.lineJoin = 'round';
+  const bx = 860, by = 1200;
+  c.fillStyle = 'rgba(38,45,18,.25)'; c.fillRect(bx - 18, by + 12, 204, 9);
+  c.fillStyle = '#a8513a'; rr(bx - 22, by - 2, 204, 16, 3); c.fill(); c.stroke();
+  c.fillStyle = '#c8694a';
+  c.beginPath(); c.arc(bx + 40, by, 54, Math.PI, 1.5 * Math.PI); c.arc(bx + 40, by, 41, 1.5 * Math.PI, Math.PI, true); c.closePath(); c.fill(); c.stroke();
+  c.beginPath(); c.arc(bx + 116, by, 54, 1.5 * Math.PI, TAU); c.arc(bx + 116, by, 41, TAU, 1.5 * Math.PI, true); c.closePath(); c.fill(); c.stroke();
+  c.fillStyle = '#d47c5a'; c.beginPath(); c.moveTo(bx + 40, by); c.lineTo(bx + 116, by); c.lineTo(bx + 116, by - 140); c.closePath(); c.fill(); c.stroke();
+  c.lineWidth = 1.5; for (let t = .06; t < 1; t += .07) { const px = bx + 40 + 76 * t, py = by - 140 * t; line(px, py, px + 7, py) }
+  c.fillStyle = '#c8694a'; c.lineWidth = 2.5; rr(bx + 106, by - 154, 16, 14, 2); c.fill(); c.stroke();
+  // Jai Prakash bowls
+  [[1050, 1080], [1050, 1135]].forEach(([x, y]) => { c.fillStyle = '#c8694a'; c.beginPath(); c.arc(x, y, 22, 0, Math.PI); c.closePath(); c.fill(); c.stroke(); c.fillStyle = '#a8513a'; c.beginPath(); c.ellipse(x, y, 22, 6, 0, 0, TAU); c.fill(); c.stroke() });
+  // Ram Yantra
+  [[800, 1080], [800, 1140]].forEach(([x, y]) => { c.fillStyle = '#c8694a'; rr(x - 18, y - 40, 36, 42, 4); c.fill(); c.stroke(); c.fillStyle = '#a8513a'; c.beginPath(); c.ellipse(x, y - 40, 18, 6, 0, 0, TAU); c.fill(); c.stroke(); c.fillStyle = '#f6efd9'; c.fillRect(x - 3, y - 30, 6, 12) });
+}
+function temple() {
+  const { x, y } = TEMPLE;
+  c.strokeStyle = INK; c.lineWidth = 2.5; c.lineJoin = 'round';
+  c.fillStyle = 'rgba(38,45,18,.3)'; c.beginPath(); c.ellipse(x, y, 46, 10, 0, 0, TAU); c.fill();
+  c.fillStyle = '#efe6cc'; rr(x - 40, y - 30, 80, 30, 3); c.fill(); c.stroke();
+  c.fillStyle = '#d77a3a'; c.beginPath(); c.moveTo(x - 24, y - 30); c.quadraticCurveTo(x - 20, y - 74, x, y - 92); c.quadraticCurveTo(x + 20, y - 74, x + 24, y - 30); c.closePath(); c.fill(); c.stroke();
+  c.lineWidth = 1.5; [-55, -70].forEach(dy => line(x - 18 + (dy + 55) * -.3, y + dy, x + 18 - (dy + 55) * -.3, y + dy));
+  c.strokeStyle = '#6b4423'; c.lineWidth = 2; line(x, y - 92, x, y - 112);
+  c.fillStyle = '#e3b23c'; c.beginPath(); c.moveTo(x, y - 112); c.lineTo(x + 16, y - 106); c.lineTo(x, y - 100); c.closePath(); c.fill(); c.strokeStyle = INK; c.stroke();
+  c.fillStyle = '#8a5a2b'; rr(x - 9, y - 22, 18, 22, 6); c.fill(); c.stroke();
+}
+function tent(t) {
+  const { x, y } = t;
+  c.strokeStyle = INK; c.lineWidth = 2;
+  c.strokeStyle = '#6b4423'; c.lineWidth = 3; line(x - 40, y, x - 40, y - 34); line(x + 40, y, x + 40, y - 34);
+  for (let i = 0; i < 8; i++) { c.fillStyle = i % 2 ? CREAM : '#b5432d'; c.fillRect(x - 46 + i * 11.5, y - 46, 11.5, 14) }
+  c.strokeStyle = INK; c.lineWidth = 2; c.strokeRect(x - 46, y - 46, 92, 14);
+  c.fillStyle = '#e3b23c'; c.beginPath(); for (let i = 0; i < 8; i++) { c.moveTo(x - 46 + i * 11.5, y - 32); c.lineTo(x - 40 + i * 11.5, y - 26); c.lineTo(x - 34.5 + i * 11.5, y - 32) } c.fill();
+}
+
+// ground pre-render
+const ground = document.createElement('canvas'); ground.width = W; ground.height = H;
+function buildGround() {
+  const g = ground.getContext('2d'), r = seeded(3);
+  g.fillStyle = '#7d8c45'; g.fillRect(0, 0, W, H);
+  for (let i = 0; i < 70; i++) { g.fillStyle = r() < .5 ? 'rgba(246,239,217,.06)' : 'rgba(38,45,18,.08)'; g.beginPath(); g.ellipse(r() * W, r() * H, 40 + r() * 120, 20 + r() * 60, r() * 3, 0, TAU); g.fill() }
+  g.strokeStyle = '#5f6e30'; g.lineWidth = 1.5;
+  for (let i = 0; i < 900; i++) { const x = r() * W, y = r() * H; g.beginPath(); g.moveTo(x - 3, y - 4); g.lineTo(x, y); g.lineTo(x + 3, y - 5); g.stroke() }
+  // Connaught Place blocks
+  g.fillStyle = '#8fa052'; g.beginPath(); g.arc(CPc.x, CPc.y, 132, 0, TAU); g.fill();
+  const ring = (r1, r2, col) => { g.fillStyle = col; g.beginPath(); g.arc(CPc.x, CPc.y, r2, 0, TAU); g.arc(CPc.x, CPc.y, r1, 0, TAU, true); g.fill(); g.strokeStyle = INK; g.lineWidth = 2; g.stroke() };
+  ring(172, 270, '#ece3c6'); ring(332, 420, '#e6dcbc');
+  g.strokeStyle = 'rgba(38,45,18,.25)'; g.lineWidth = 2;
+  for (let a = 0; a < 360; a += 6) { const p1 = cpPt(a, 180), p2 = cpPt(a, 188); g.beginPath(); g.moveTo(p1[0], p1[1]); g.lineTo(p2[0], p2[1]); g.stroke() }
+  const lw = (s) => s.w;
+  g.lineCap = 'round'; g.lineJoin = 'round';
+  const strokeAll = (extra, col) => {
+    g.strokeStyle = col;
+    SEGS.forEach(s => { g.lineWidth = lw(s) + extra; g.beginPath(); g.moveTo(s.a[0], s.a[1]); g.lineTo(s.b[0], s.b[1]); g.stroke() });
+    RINGS.forEach(rg => { g.lineWidth = rg.w + extra; g.beginPath(); g.arc(CPc.x, CPc.y, rg.r, 0, TAU); g.stroke() });
+  };
+  strokeAll(12, '#cfc39c'); strokeAll(0, '#8f8a76');
+  g.strokeStyle = 'rgba(246,239,217,.75)'; g.lineWidth = 3; g.setLineDash([22, 18]); g.lineCap = 'butt';
+  SEGS.filter(s => !s.spoke).forEach(s => { g.beginPath(); g.moveTo(s.a[0], s.a[1]); g.lineTo(s.b[0], s.b[1]); g.stroke() });
+  RINGS.forEach(rg => { g.beginPath(); g.arc(CPc.x, CPc.y, rg.r, 0, TAU); g.stroke() });
+  g.setLineDash([]);
+  // zebra at Patel Chowk & Jantar Mantar junction
+  g.fillStyle = 'rgba(246,239,217,.8)'; for (let i = 0; i < 6; i++) g.fillRect(1104 + i * 10 - 30, 1355, 6, 26);
+  // road names
+  g.font = '15px Bungee, Impact, sans-serif'; g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillStyle = 'rgba(246,239,217,.6)';
+  ROADS.forEach(rd => {
+    let best = null, bl = 0;
+    for (let i = 0; i < rd.pts.length - 1; i++) { const l = Math.hypot(rd.pts[i + 1][0] - rd.pts[i][0], rd.pts[i + 1][1] - rd.pts[i][1]); if (l > bl) { bl = l; best = [rd.pts[i], rd.pts[i + 1]] } }
+    let ang = Math.atan2(best[1][1] - best[0][1], best[1][0] - best[0][0]); if (ang > Math.PI / 2) ang -= Math.PI; if (ang < -Math.PI / 2) ang += Math.PI;
+    [.3, .72].forEach(t => {
+      const x = best[0][0] + (best[1][0] - best[0][0]) * t, y = best[0][1] + (best[1][1] - best[0][1]) * t;
+      if (rd.name === 'JANTAR MANTAR ROAD' && x > 600) return;
+      g.save(); g.translate(x, y); g.rotate(ang); g.fillText(rd.name, 0, 0); g.restore();
+    });
+  });
+  // houses
+  HOUSES.forEach(o => {
+    g.fillStyle = 'rgba(38,45,18,.3)'; g.fillRect(o.x + 6, o.y + 8, o.w, o.h);
+    g.fillStyle = '#efe6cc'; g.fillRect(o.x, o.y, o.w, o.h);
+    g.fillStyle = '#b5654a'; g.fillRect(o.x + 8, o.y + 8, o.w - 16, o.h - 16);
+    g.strokeStyle = INK; g.lineWidth = 2; g.strokeRect(o.x, o.y, o.w, o.h); g.strokeRect(o.x + 8, o.y + 8, o.w - 16, o.h - 16);
+    g.beginPath(); g.moveTo(o.x + 8, o.y + 8); g.lineTo(o.x + o.w / 2 - 10, o.y + o.h / 2); g.lineTo(o.x + o.w / 2 + 10, o.y + o.h / 2); g.lineTo(o.x + o.w - 8, o.y + 8);
+    g.moveTo(o.x + 8, o.y + o.h - 8); g.lineTo(o.x + o.w / 2 - 10, o.y + o.h / 2); g.moveTo(o.x + o.w / 2 + 10, o.y + o.h / 2); g.lineTo(o.x + o.w - 8, o.y + o.h - 8); g.stroke();
+    if (o.name) { g.fillStyle = INK; g.font = '13px Bungee, Impact, sans-serif'; g.fillText(o.name, o.x + o.w / 2, o.y + o.h + 16) }
+  });
+  // Jantar Mantar compound
+  const C = COMPOUND;
+  g.fillStyle = '#d8b48a'; g.fillRect(C.x, C.y, C.w, C.h);
+  g.fillStyle = '#c9a47a'; for (let x = C.x; x < C.x + C.w; x += 30) for (let y = C.y; y < C.y + C.h; y += 30) if (((x - C.x + y - C.y) / 30) % 2 === 0) g.fillRect(x, y, Math.min(30, C.x + C.w - x), Math.min(30, C.y + C.h - y));
+  g.fillStyle = 'rgba(111,154,42,.6)'; g.fillRect(C.x + 120, C.y + 16, 70, 40); g.fillRect(C.x + 200, C.y + 70, 60, 50);
+  g.strokeStyle = '#9c4a2e'; g.lineWidth = 9;
+  g.beginPath(); g.moveTo(C.x + 140, C.y + C.h); g.lineTo(C.x, C.y + C.h); g.lineTo(C.x, C.y); g.lineTo(C.x + C.w, C.y); g.lineTo(C.x + C.w, C.y + C.h); g.lineTo(C.x + 200, C.y + C.h); g.stroke();
+  g.fillStyle = INK; g.font = '22px Bungee, Impact, sans-serif'; g.fillText('JANTAR MANTAR', C.x + C.w / 2, C.y - 18);
+  g.font = '700 13px Hind, sans-serif'; g.fillText('observatory, 1724', C.x + C.w / 2, C.y - 2 - 0);
+  // dharna strip
+  g.fillStyle = 'rgba(232,207,163,.85)'; g.fillRect(ZONE.x, ZONE.y, ZONE.w, ZONE.h);
+  g.strokeStyle = '#e3b23c'; g.lineWidth = 5; g.setLineDash([16, 10]); g.strokeRect(ZONE.x, ZONE.y, ZONE.w, ZONE.h); g.setLineDash([]);
+  g.fillStyle = 'rgba(138,90,43,.4)'; g.font = '24px Bungee, Impact, sans-serif'; g.fillText('DHARNA STHAL', ZONE.x + ZONE.w / 2, ZONE.y + ZONE.h / 2);
+  // safe zones
+  STALLS.forEach(s => {
+    g.fillStyle = 'rgba(246,239,217,.16)'; g.beginPath(); g.arc(s.x, s.y - 10, SAFE_R, 0, TAU); g.fill();
+    g.strokeStyle = 'rgba(246,239,217,.7)'; g.lineWidth = 3; g.setLineDash([10, 8]); g.stroke(); g.setLineDash([]);
+  });
+  // landmark labels
+  const label = (t, x, y, sz = 16, col = 'rgba(246,239,217,.9)') => { g.fillStyle = col; g.font = sz + 'px Bungee, Impact, sans-serif'; g.fillText(t, x, y) };
+  label('RAJIV CHOWK', CPc.x, CPc.y - 18, 18, INK); g.font = '700 13px Hind, sans-serif'; g.fillStyle = INK; g.fillText('Central Park · kafila starts here', CPc.x, CPc.y + 4);
+  label('CONNAUGHT PLACE', CPc.x, CPc.y + 470, 18);
+  label('HANUMAN MANDIR', TEMPLE.x, TEMPLE.y + 22, 13, INK);
+  label('PATEL CHOWK METRO', 1260, 1580, 14);
+  g.fillStyle = '#b5432d'; g.beginPath(); g.arc(1160, 1580, 11, 0, TAU); g.fill(); g.fillStyle = CREAM; g.font = '13px Bungee, sans-serif'; g.fillText('M', 1160, 1581);
+  g.fillStyle = '#b5432d'; g.beginPath(); g.arc(CPc.x + 70, CPc.y - 60, 11, 0, TAU); g.fill(); g.fillStyle = CREAM; g.fillText('M', CPc.x + 70, CPc.y - 59);
+  label('TO PARLIAMENT ↓', 1180, 1870, 14);
+  label('PALIKA BAZAAR', CPc.x, CPc.y + 60, 11, 'rgba(38,45,18,.6)');
+  label('NEW DELHI', 2150, 120, 30, 'rgba(246,239,217,.25)');
+}
+
+// ---------- state ----------
+const G = { state: 'menu', mode: 'protest', round: 1, sound: store.get('sound') !== '0', t: 0, shake: 0, mash: 0, st: null, banner: null };
+let LD, F, B, K, BAR, trail, need, dharna, ring, ME;
+const best = m => +(store.get('best_' + m) || 0);
+function spawnPoint(minStart = 220) {
+  for (let i = 0; i < 80; i++) {
+    const x = rand(60, W - 60), y = rand(60, H - 60);
+    if (!blocked(x, y, 30) && !inHouse(x, y, 10) && Math.hypot(x - START.x, y - START.y) > minStart) return { x, y };
+  }
+  return { x: 1300, y: 900 };
+}
+function mkBy(L, x, y) { return { L, x, y, wx: x, wy: y, face: Math.random() < .5 ? 1 : -1, phase: rand(0, 6), moving: false, st: 'idle', t: rand(0, 3), cool: 0, say: null, run: 0 } }
+function mkCop(x, y, L) { return { L: L || copLook(), x, y, hx: x, hy: y, wx: x, wy: y, face: -1, phase: 0, moving: false, cool: 0, chase: false, alert: 0, t: 0, say: null, stam: 100, dirx: 1, diry: 0 } }
+function seg(x1, y1, x2, y2, pl) { return { a: { x: x1, y: y1 }, b: { x: x2, y: y2 }, pl } }
+function newRound() {
+  const r = G.round, police = G.mode === 'police';
+  LD = { x: START.x, y: START.y, face: 1, phase: 0, moving: false, stam: 100, inv: 0, say: null, cd: 0, slow: 0 };
+  F = []; trail = [{ x: LD.x, y: LD.y }]; need = 4 + 2 * r; dharna = 0; ring = null; G.st = null; G.banner = null; G.mash = 0;
+  G.chances = 3; G.detained = 0; G.timeLeft = 80 + 10 * r;
+  G.ai = { goal: null, t: 0, hide: 0, noHide: 0, stuck: 0, jit: 0, jx: 0, jy: 0, lx: LD.x, ly: LD.y };
+  B = [];
+  for (let i = 0, n = 34 + 6 * r; i < n; i++) {
+    let p = i < (police ? 2 : 6) ? { x: START.x + rand(-90, 90), y: START.y + rand(-60, 70) } : spawnPoint();
+    B.push(mkBy(randLook(), p.x, p.y));
+  }
+  K = [];
+  if (police) {
+    const me = mkCop(COP_HQ.x, COP_HQ.y, SHO); me.pl = true; K.push(me);
+    for (let i = 0; i < 1 + r; i++) { let p; do { p = spawnPoint(560) } while (p.y < 700); K.push(mkCop(p.x, p.y)) }
+  } else {
+    for (let i = 0, n = 3 + 2 * r; i < n; i++) { let p; do { p = spawnPoint(650) } while (false); K.push(mkCop(p.x, p.y)) }
+    if (r >= 2) { K.push(mkCop(1180, 1260)); K.push(mkCop(600, 1300)) }
+  }
+  ME = police ? K[0] : LD;
+  BAR = [seg(626, 1248, 626, 1290), seg(1128, 1298, 1128, 1336)];
+  const named = SEGS.filter(s => !s.spoke && s.r.name !== 'JANTAR MANTAR ROAD');
+  for (let i = 0, tries = 0; i < 3 + r && tries < 60; tries++) {
+    const s = pick(named), t = rand(.15, .85), vx = s.b[0] - s.a[0], vy = s.b[1] - s.a[1], l = Math.hypot(vx, vy);
+    const px = s.a[0] + vx * t, py = s.a[1] + vy * t, nx = -vy / l, ny = vx / l, side = Math.random() < .5 ? -1 : 1;
+    if (Math.hypot(px - START.x, py - START.y) < 450 || STALLS.some(st => Math.hypot(px - st.x, py - st.y) < 110)) continue;
+    const half = s.w * .3, off = side * s.w * .22;
+    BAR.push(seg(px + nx * (off - half), py + ny * (off - half), px + nx * (off + half), py + ny * (off + half)));
+    i++;
+  }
+}
+const say = (e, text, t = 1.8) => { e.say = { text, t } };
+const banner = (text, t = 2.2) => { G.banner = { text, t } };
+
+// ---------- sound ----------
+let ac;
+function tone(f, d = .08, type = 'square', vol = .05, delay = 0) {
+  if (!G.sound) return;
+  try {
+    ac = ac || new (window.AudioContext || window.webkitAudioContext)();
+    const t0 = ac.currentTime + delay, o = ac.createOscillator(), g = ac.createGain();
+    o.type = type; o.frequency.setValueAtTime(f, t0); g.gain.setValueAtTime(vol, t0); g.gain.exponentialRampToValueAtTime(.0001, t0 + d);
+    o.connect(g); g.connect(ac.destination); o.start(t0); o.stop(t0 + d + .02);
+  } catch (e) {}
+}
+const sfx = {
+  join() { tone(660, .06); tone(990, .08, 'square', .04, .06) },
+  shout() { tone(320, .12, 'sawtooth', .05); tone(420, .16, 'sawtooth', .05, .12) },
+  whistle() { tone(2100, .1, 'sine', .05); tone(2300, .18, 'sine', .05, .12) },
+  hit() { tone(160, .3, 'sawtooth', .07) },
+  grab() { tone(120, .12, 'square', .07); tone(90, .2, 'square', .07, .1) },
+  mash() { tone(240 + Math.random() * 80, .04, 'square', .03) },
+  free() { [440, 660, 880].forEach((f, i) => tone(f, .1, 'square', .05, i * .07)) },
+  thud() { tone(70, .4, 'sine', .3); tone(140, .2, 'sawtooth', .05) },
+  win() { [523, 659, 784, 1047].forEach((f, i) => tone(f, .16, 'square', .05, i * .12)); [0, .25, .5, .62, .75].forEach(d => tone(90, .15, 'sine', .25, .6 + d)) },
+  lose() { [400, 300, 200].forEach((f, i) => tone(f, .25, 'sawtooth', .06, i * .2)) }
+};
+
+// ---------- input ----------
+const keys = {}; let aReq = false, bReq = false, touchSprint = false, joy = null;
+const coarse = matchMedia('(pointer: coarse)').matches;
+const playerInStruggle = () => G.st && (G.mode === 'protest' || G.st.cop.pl);
+function pressA() { if (playerInStruggle()) { G.mash++; sfx.mash() } else aReq = true }
+function pressB() { if (playerInStruggle()) { G.mash++; sfx.mash() } else bReq = true }
+addEventListener('keydown', e => {
+  const k = e.key.length === 1 ? e.key.toLowerCase() : e.key;
+  if (G.state === 'play' && ['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', ' '].includes(e.key)) e.preventDefault();
+  keys[k] = true;
+  if (G.state === 'play' && !e.repeat) { if (k === ' ') pressA(); if (k === 'e') pressB() }
+  if ((k === 'p' || k === 'Escape') && (G.state === 'play' || G.state === 'paused')) togglePause();
+});
+addEventListener('keyup', e => { keys[e.key.length === 1 ? e.key.toLowerCase() : e.key] = false });
+addEventListener('blur', () => { for (const k in keys) keys[k] = false; if (G.state === 'play') togglePause() });
+cv.addEventListener('pointerdown', e => {
+  if (G.state !== 'play' || (e.pointerType === 'mouse' && e.button !== 0)) return;
+  if (playerInStruggle()) { G.mash++; sfx.mash(); return }
+  const r = cv.getBoundingClientRect(); joy = { id: e.pointerId, ox: e.clientX - r.left, oy: e.clientY - r.top, x: e.clientX - r.left, y: e.clientY - r.top };
+  cv.setPointerCapture(e.pointerId);
+});
+cv.addEventListener('pointermove', e => { if (joy && joy.id === e.pointerId) { const r = cv.getBoundingClientRect(); joy.x = e.clientX - r.left; joy.y = e.clientY - r.top } });
+const endJoy = e => { if (joy && joy.id === e.pointerId) joy = null };
+cv.addEventListener('pointerup', endJoy); cv.addEventListener('pointercancel', endJoy);
+$('bA').addEventListener('pointerdown', e => { e.preventDefault(); pressA() });
+$('bB').addEventListener('pointerdown', e => { e.preventDefault(); pressB() });
+const sp = $('bSprint');
+sp.addEventListener('pointerdown', e => { e.preventDefault(); touchSprint = true; sp.classList.add('on') });
+['pointerup', 'pointercancel', 'pointerleave'].forEach(ev => sp.addEventListener(ev, () => { touchSprint = false; sp.classList.remove('on') }));
+$('bSound').addEventListener('click', () => { G.sound = !G.sound; store.set('sound', G.sound ? '1' : '0'); $('bSound').textContent = G.sound ? 'Sound on' : 'Sound off'; if (G.sound) tone(660) });
+$('bSound').textContent = G.sound ? 'Sound on' : 'Sound off';
+$('bPause').addEventListener('click', togglePause);
+function readInput() {
+  let dx = (keys.ArrowRight || keys.d ? 1 : 0) - (keys.ArrowLeft || keys.a ? 1 : 0);
+  let dy = (keys.ArrowDown || keys.s ? 1 : 0) - (keys.ArrowUp || keys.w ? 1 : 0);
+  let mag = Math.hypot(dx, dy); if (mag) { dx /= mag; dy /= mag; mag = 1 }
+  if (joy) { const jx = joy.x - joy.ox, jy = joy.y - joy.oy, l = Math.hypot(jx, jy); if (l > 8) { mag = Math.min(1, l / 50); dx = jx / l; dy = jy / l } }
+  return { dx, dy, mag, sprint: (keys.Shift || touchSprint) && mag > 0 };
+}
+
+// ---------- screens ----------
+const screen = $('screen'), card = $('card');
+function show(html, actions) {
+  card.innerHTML = html; screen.hidden = false; $('touch').hidden = true;
+  const row = document.createElement('div'); row.className = 'row';
+  actions.forEach(([label, fn, cls]) => { const b = document.createElement('button'); b.type = 'button'; b.className = 'btn' + (cls ? ' ' + cls : ''); b.textContent = label; b.onclick = fn; row.appendChild(b) });
+  card.appendChild(row); row.firstChild.focus({ preventScroll: true });
+}
+function play() {
+  G.state = 'play'; screen.hidden = true; $('touch').hidden = !coarse;
+  const police = G.mode === 'police';
+  $('bB').hidden = !police; $('bA').textContent = police ? 'SEETI' : 'NARA!';
+  cv.focus({ preventScroll: true }); try { ac && ac.resume() } catch (e) {}
+}
+function startMode(m) { G.mode = m; G.round = 1; newRound(); play() }
+function menu() {
+  G.state = 'menu'; G.mode = 'protest'; newRound();
+  show(`<h1>JANTAR MANTAR <em>CHALO!</em></h1>
+    <p>Start at Rajiv Chowk in Connaught Place, march down Sansad Marg and hold a dharna on Jantar Mantar Road. Or play the police and stop it happening.</p>
+    <div class="modes">
+      <div class="mode">
+        <h3>Andolankari</h3>
+        <ul class="keys">
+          <li><kbd>WASD</kbd> <kbd>↑↓←→</kbd> or drag: walk</li>
+          <li><kbd>Space</kbd> Nara: pull nearby people in (police hear it)</li>
+          <li><kbd>Shift</kbd> Bhago: run while your dum lasts</li>
+          <li>Grabbed? Mash <kbd>Space</kbd>. Your kafila pulls you free.</li>
+          <li>Get detained 3 times and the round is over.</li>
+        </ul>
+      </div>
+      <div class="mode p">
+        <h3>Dilli Police</h3>
+        <ul class="keys">
+          <li><kbd>WASD</kbd> <kbd>↑↓←→</kbd> or drag: patrol</li>
+          <li>Run into the leader to grab him, then mash <kbd>Space</kbd></li>
+          <li><kbd>Space</kbd> Seeti: freeze the kafila, scare off joiners</li>
+          <li><kbd>E</kbd> Roko: drop a barricade (max 3)</li>
+          <li>Hold out until the clock runs down.</li>
+        </ul>
+      </div>
+    </div>
+    <p class="fine">Map drawn from the real streets around Jantar Mantar, New Delhi. Chai stalls are safe zones for the kafila. Best: andolankari round ${best('protest') || '–'}, police round ${best('police') || '–'}.</p>`,
+    [['Andolankari', () => startMode('protest')], ['Dilli Police', () => startMode('police'), 'cop']]);
+}
+function togglePause() {
+  if (G.state === 'play') { G.state = 'paused'; show(`<h1>Chai <em>break</em></h1><p>Round ${G.round}. Kafila of ${F.length}. Everyone is on break, apparently.</p>`, [['Resume', play], ['Restart round', () => { newRound(); play() }, 'alt'], ['Main menu', menu, 'alt']]) }
+  else if (G.state === 'paused') play();
+}
+function endRound(won) {
+  G.state = won ? 'won' : 'lost'; won ? sfx.win() : sfx.lose();
+  if (won && G.round > best(G.mode)) store.set('best_' + G.mode, G.round);
+  const next = [['Next round', () => { G.round++; newRound(); play() }], ['Main menu', menu, 'alt']];
+  const retry = [['Retry round', () => { newRound(); play() }], ['Main menu', menu, 'alt']];
+  if (G.mode === 'protest') {
+    if (won) show(`<h1>DHARNA <em>HELD!</em></h1><p>Round ${G.round} cleared with a kafila of ${F.length}. The news channels are already arguing about crowd size.</p><p class="tag">Next round: more police, more barricades, need ${4 + 2 * (G.round + 1)} marchers.</p>`, next);
+    else show(`<h1><em>DETAINED</em></h1><p>Picked up three times in round ${G.round}. The thana chai is terrible.</p>`, retry);
+  } else {
+    if (won) show(`<h1>SECTION 144 <em>HELD</em></h1><p>Round ${G.round}: no dharna today. You detained the leader ${G.detained} time${G.detained === 1 ? '' : 's'}.</p><p class="tag">Next round: a bigger kafila and a faster leader.</p>`, next);
+    else show(`<h1>DHARNA <em>HAPPENED</em></h1><p>The kafila sat on Jantar Mantar Road for ${DHARNA_T} seconds. Prime time debate tonight. Your SHO is not happy.</p>`, retry);
+  }
+}
+
+// ---------- update helpers ----------
+function inStall(p) { return STALLS.some(s => Math.hypot(p.x - s.x, p.y - s.y + 10) < SAFE_R) }
+function collideBars(e, r) {
+  for (const b of BAR) {
+    const s = segInfo(e.x, e.y, [b.a.x, b.a.y], [b.b.x, b.b.y]), rr2 = r + 7;
+    if (s.d < rr2) { if (s.d > .01) { e.x = s.cx + (e.x - s.cx) / s.d * rr2; e.y = s.cy + (e.y - s.cy) / s.d * rr2 } else e.y += rr2 }
+  }
+}
+function moveEnt(e, inp, base, dt, bars) {
+  const sprint = inp.sprint && e.stam > 0;
+  const spd = base * (sprint ? 1.55 : 1) * inp.mag * (e.slow > 0 ? .5 : 1);
+  e.stam = clamp(e.stam + (sprint ? -38 : 16) * dt, 0, 100);
+  e.x = clamp(e.x + inp.dx * spd * dt, 14, W - 14); e.y = clamp(e.y + inp.dy * spd * dt, 20, H - 10);
+  if (bars) collideBars(e, 12);
+  e.moving = inp.mag > 0; if (Math.abs(inp.dx) > .1) e.face = inp.dx > 0 ? 1 : -1;
+  if (e.moving) { e.phase += dt * (sprint ? 16 : 11); e.dirx = inp.dx; e.diry = inp.dy }
+}
+function release(f, from) {
+  const a = rand(0, TAU), d = rand(160, 300);
+  const b = mkBy(f.L, f.x, f.y);
+  b.wx = clamp(from.x + Math.cos(a) * d, 40, W - 40); b.wy = clamp(from.y + Math.sin(a) * d, 40, H - 40);
+  if (blocked(b.wx, b.wy, 20)) b.wy = clamp(b.wy + 300, 40, H - 40);
+  b.cool = 4; b.run = 1.5; b.t = 3; say(b, pick(CAUGHT), 1.4); B.push(b);
+}
+const leaderSitting = () => inRect(LD, ZONE) && F.length >= need;
+
+// AI leader for police mode
+function aiLeader(dt) {
+  const A = G.ai; A.t -= dt; A.hide = Math.max(0, A.hide - dt); A.noHide = Math.max(0, A.noHide - dt);
+  let ax = 0, ay = 0, closest = 1e9;
+  for (const k of K) { if (k.cool > 0) continue; const d = dist(k, LD); closest = Math.min(closest, d); if (d < 240 && d > 1) { const w = (240 - d) / 240; ax += (LD.x - k.x) / d * w * 2; ay += (LD.y - k.y) / d * w * 2 } }
+  if (leaderSitting()) return { dx: 0, dy: 0, mag: 0, sprint: false };
+  if (A.hide > 0 && inStall(LD)) { if (closest > 260) A.hide = 0; return { dx: 0, dy: 0, mag: 0, sprint: false } }
+  if (closest < 160 && A.noHide <= 0 && !inStall(LD)) {
+    const s = STALLS.reduce((a, b) => dist(LD, a) < dist(LD, b) ? a : b);
+    if (dist(LD, s) < 240) { A.goal = { x: s.x, y: s.y - 10 }; A.hide = 3; A.noHide = 7; A.t = 1.5 }
+  }
+  if (A.t <= 0 || !A.goal) {
+    A.t = .4;
+    if (F.length >= need) A.goal = { x: ZONE.x + 60 + Math.random() * (ZONE.w - 120), y: ZONE.y + ZONE.h / 2 };
+    else {
+      let bestB = null, bs = 1e9;
+      B.forEach(b => { if (b.cool > 0) return; let sc = dist(b, LD); K.forEach(k => { const d = dist(k, b); if (d < 300) sc += (300 - d) * 2 }); if (sc < bs) { bs = sc; bestB = b } });
+      A.goal = bestB ? { x: bestB.x, y: bestB.y } : { x: ZONE.x + ZONE.w / 2, y: ZONE.y + ZONE.h / 2 };
+    }
+  }
+  let gx = A.goal.x - LD.x, gy = A.goal.y - LD.y; const gl = Math.hypot(gx, gy) || 1; gx /= gl; gy /= gl;
+  if (A.hide > 0) { ax *= .2; ay *= .2 }
+  let dx = gx + ax, dy = gy + ay;
+  if (A.jit > 0) { A.jit -= dt; dx += A.jx * 1.5; dy += A.jy * 1.5 }
+  const l = Math.hypot(dx, dy) || 1;
+  A.stuck += dt;
+  if (A.stuck > 1) { if (Math.hypot(LD.x - A.lx, LD.y - A.ly) < 25) { A.jit = .8; const s = Math.random() < .5 ? 1 : -1; A.jx = -gy * s; A.jy = gx * s } A.stuck = 0; A.lx = LD.x; A.ly = LD.y }
+  if (LD.cd <= 0 && closest > 320 && B.filter(b => b.cool <= 0 && dist(b, LD) < 190).length >= 2) aReqAI = true;
+  return { dx: dx / l, dy: dy / l, mag: 1, sprint: closest < 170 && LD.stam > 20 };
+}
+let aReqAI = false;
+
+function doShout() {
+  LD.cd = 1.6; ring = { x: LD.x, y: LD.y, t: 0, col: '227,178,60', r: 190 }; say(LD, pick(SLOGANS), 1.5); sfx.shout();
+  B.forEach(b => { if (b.cool <= 0 && dist(b, LD) < 190) b.st = 'coming' });
+  K.forEach(k => { if (dist(k, LD) < 460) k.alert = 4 });
+  F.forEach((f, i) => { if (i < 3 && Math.random() < .6) say(f, pick(['Zindabad!', 'Zindabad!', 'Hum dekhenge!']), 1.2) });
+}
+function doWhistle(me) {
+  me.cd = 3.5; ring = { x: me.x, y: me.y, t: 0, col: '181,67,45', r: 220 }; say(me, pick(['Tweeet!', 'Hatt jao!', 'Ghar jao!']), 1.2); sfx.whistle();
+  B.forEach(b => { if (dist(b, me) < 220) { b.cool = Math.max(b.cool, 5); b.st = 'idle'; if (Math.random() < .3) say(b, pick(['Hain?', 'Main toh bas chai...', 'Jaa raha hoon']), 1.2) } });
+  F.forEach(f => { if (dist(f, me) < 180) f.freeze = 1.6 });
+  if (dist(LD, me) < 180) LD.slow = 1.2;
+}
+function dropBarricade(me) {
+  if (me.bcd > 0) return; me.bcd = .8;
+  const dx = me.dirx || me.face, dy = me.diry || 0, l = Math.hypot(dx, dy) || 1, ux = dx / l, uy = dy / l;
+  const cx = me.x + ux * 34, cy = me.y + uy * 34, px = -uy, py = ux;
+  const mine = BAR.filter(b => b.pl); if (mine.length >= 3) BAR.splice(BAR.indexOf(mine[0]), 1);
+  BAR.push(seg(cx - px * 34, cy - py * 34, cx + px * 34, cy + py * 34, true)); say(me, 'Barricade!', 1); tone(180, .1, 'square', .06);
+}
+function startStruggle(cop) {
+  G.st = { cop, m: 50, t: 0 }; G.mash = 0; joy = null;
+  say(cop, pick(['Pakad liya!', 'Chal thane!', 'Kahan ja raha?']), 1.6); say(LD, pick(['Chhodo!', 'Haath mat lagao!', 'Azaadi!']), 1.6); sfx.grab();
+}
+function struggleStep(dt) {
+  const s = G.st, r = G.round; s.t += dt;
+  const near = F.filter(f => dist(f, LD) < 140).length, inZ = inRect(LD, ZONE, 10);
+  const kafila = Math.min(30, near * 3) * (inZ ? 1.4 : 1);
+  const helpers = K.filter(k => k !== s.cop && k.cool <= 0 && dist(k, LD) < 130).length * 10;
+  const pro = G.mode === 'protest' ? G.mash * 7 : (18 + 2 * r) * dt;
+  const cop = s.cop.pl ? G.mash * 7 : (G.mode === 'protest' ? 20 + 4 * r : 16 + 3 * r) * dt;
+  G.mash = 0;
+  s.m = clamp(s.m + pro - cop + (kafila - helpers) * dt, 0, 100); s.kafila = kafila; s.helpers = helpers;
+  if (near && Math.random() < dt * 1.2) say(pick(F.filter(f => dist(f, LD) < 140)), pick(['Chhodo use!', 'Zindabad!', 'Haath hatao!']), 1);
+  if (s.m >= 100 || (s.t > 7 && s.m >= 50)) {
+    const k = s.cop; k.cool = 2.2; const a = Math.atan2(k.y - LD.y, k.x - LD.x); k.x += Math.cos(a) * 60; k.y += Math.sin(a) * 60;
+    LD.inv = 2; say(LD, 'Chhoot gaya!', 1.4); G.st = null; sfx.free(); G.shake = .2;
+    banner(G.mode === 'protest' ? 'Broke free! Kafila zindabad' : 'He slipped away!');
+  } else if (s.m <= 0 || s.t > 7) {
+    const k = s.cop; G.st = null; k.cool = 1.5; G.detained++;
+    F.splice(F.length - Math.ceil(F.length / 2)).forEach(f => release(f, LD));
+    G.shake = .45; sfx.thud(); say(k, 'Bus mein baitho!', 1.4);
+    if (G.mode === 'protest') { G.chances--; if (G.chances <= 0) { endRound(false); return } }
+    LD.x = START.x + rand(-30, 30); LD.y = START.y; trail = [{ x: LD.x, y: LD.y }]; LD.inv = 2.5; dharna = 0; G.ai.goal = null;
+    banner(G.mode === 'protest' ? 'Detained! Thrown back to Rajiv Chowk' : 'Detained! Dumped at Rajiv Chowk', 2.6);
+  }
+}
+
+// ---------- main update ----------
+function step(dt) {
+  G.t += dt; G.shake = Math.max(0, G.shake - dt);
+  if (G.banner && (G.banner.t -= dt) <= 0) G.banner = null;
+  const police = G.mode === 'police', r = G.round;
+  if (G.st) struggleStep(dt);
+  if (G.state !== 'play') return;
+  const inp = readInput();
+  LD.inv = Math.max(0, LD.inv - dt); LD.cd = Math.max(0, LD.cd - dt); LD.slow = Math.max(0, LD.slow - dt);
+  // leader
+  const lInp = police ? aiLeader(dt) : inp;
+  if (!G.st) moveEnt(LD, lInp, (police ? 158 + 4 * r : 170) - Math.min(60, F.length * 2.2), dt, true);
+  else { LD.moving = false }
+  if (Math.hypot(LD.x - trail[0].x, LD.y - trail[0].y) > 4) { trail.unshift({ x: LD.x, y: LD.y }); if (trail.length > 1200) trail.length = 1200 }
+  if (!police && aReq && LD.cd <= 0 && !G.st) doShout();
+  if (police && aReqAI && !G.st) doShout();
+  aReqAI = false;
+  // player cop
+  if (police) {
+    const me = K[0]; me.cd = Math.max(0, (me.cd || 0) - dt); me.bcd = Math.max(0, (me.bcd || 0) - dt); me.cool = Math.max(0, me.cool - dt);
+    if (!(G.st && G.st.cop === me)) moveEnt(me, inp, 178, dt, false); else me.moving = false;
+    if (aReq && me.cd <= 0 && !G.st) doWhistle(me);
+    if (bReq && !G.st) dropBarricade(me);
+  }
+  aReq = bReq = false;
+  if (ring && (ring.t += dt) > .45) ring = null;
+  const pSafe = inStall(LD), sitting = leaderSitting();
+
+  // followers
+  F.forEach((f, i) => {
+    f.freeze = Math.max(0, (f.freeze || 0) - dt);
+    if (f.freeze > 0) { f.moving = false; return }
+    let tx, ty;
+    if (sitting) { const col = i % 12, row = i / 12 | 0; tx = ZONE.x + 30 + col * 36; ty = ZONE.y + 22 + row * 30 }
+    else { const tp = trail[Math.min(trail.length - 1, (i + 1) * 7)]; tx = tp.x; ty = tp.y }
+    const ddx = tx - f.x, ddy = ty - f.y, d = Math.hypot(ddx, ddy);
+    const mv = Math.min(d, clamp(d * 7, 60, 230) * dt);
+    if (d > .5) { f.x += ddx / d * mv; f.y += ddy / d * mv }
+    f.moving = d > 2; if (Math.abs(ddx) > .6) f.face = ddx > 0 ? 1 : -1;
+    if (f.moving) f.phase += dt * 11;
+    f.sit = sitting && d < 4;
+  });
+
+  // bystanders
+  for (let i = B.length - 1; i >= 0; i--) {
+    const b = B[i]; b.cool = Math.max(0, b.cool - dt); b.run = Math.max(0, b.run - dt);
+    let tx = b.wx, ty = b.wy, spd = b.run > 0 ? 150 : 32;
+    const d = dist(b, LD);
+    if (b.st === 'coming' && b.cool <= 0) { tx = LD.x; ty = LD.y; spd = 135; if (d > 420) b.st = 'idle' }
+    else { b.t -= dt; if (b.t <= 0) { b.t = rand(2, 5); const nx = clamp(b.x + rand(-70, 70), 40, W - 40), ny = clamp(b.y + rand(-70, 70), 40, H - 40); if (!blocked(nx, ny, 10)) { b.wx = nx; b.wy = ny } } }
+    const ddx = tx - b.x, ddy = ty - b.y, dd = Math.hypot(ddx, ddy);
+    b.moving = dd > 3;
+    if (b.moving) { const mv = Math.min(dd, spd * dt); b.x += ddx / dd * mv; b.y += ddy / dd * mv; b.phase += dt * (spd > 60 ? 12 : 6); if (Math.abs(ddx) > .5) b.face = ddx > 0 ? 1 : -1 }
+    if (d < 22 && b.cool <= 0 && !G.st) {
+      B.splice(i, 1);
+      const f = { L: b.L, x: b.x, y: b.y, face: b.face, phase: b.phase, moving: false, item: Math.random() < .65 ? 'placard' : 'flag', sign: pick(SIGNS), fc: pick(FLAGS), sc: pick(['#b5432d', '#3e4a1d', '#8a5a2b']), say: null };
+      say(f, pick(JOIN), 1.4); F.push(f); if (!police || dist(LD, K[0]) < 500) sfx.join();
+    }
+  }
+
+  // police
+  const cs = police ? 110 + 5 * r : 118 + 8 * r;
+  K.forEach(k => {
+    if (!k.pl) {
+      k.cool = Math.max(0, k.cool - dt); k.alert = Math.max(0, k.alert - dt);
+      const d = dist(k, LD), sight = k.alert > 0 ? 480 : 250;
+      let tx = k.wx, ty = k.wy, spd = 58;
+      if (k.cool > 0 || (G.st && G.st.cop === k)) { tx = k.x; ty = k.y }
+      else if (G.st) { tx = LD.x + (k.x < LD.x ? -40 : 40); ty = LD.y; spd = cs }
+      else if ((d < sight || (sitting && d < 900)) && !pSafe) {
+        if (!k.chase) { k.chase = true; if (Math.random() < .75) say(k, pick(COP_LINES)); if (Math.random() < .4 && dist(k, ME) < 600) sfx.whistle() }
+        tx = LD.x; ty = LD.y; spd = cs * (inRect(k, ZONE) ? .62 : 1);
+      } else if (pSafe && d < sight) {
+        const s = STALLS.reduce((a, b) => dist(LD, a) < dist(LD, b) ? a : b);
+        const a = Math.atan2(k.y - s.y, k.x - s.x); tx = s.x + Math.cos(a) * (SAFE_R + 18); ty = s.y - 10 + Math.sin(a) * (SAFE_R + 18); spd = 90;
+      } else {
+        k.chase = false; k.t -= dt;
+        if (k.t <= 0) { k.t = rand(2, 4); k.wx = clamp(k.hx + rand(-220, 220), 30, W - 30); k.wy = clamp(k.hy + rand(-220, 220), 30, H - 30) }
+      }
+      const ddx = tx - k.x, ddy = ty - k.y, dd = Math.hypot(ddx, ddy);
+      k.moving = dd > 3;
+      if (k.moving) { const mv = Math.min(dd, spd * dt); k.x += ddx / dd * mv; k.y += ddy / dd * mv; k.phase += dt * (spd > 80 ? 13 : 7); if (Math.abs(ddx) > .5) k.face = ddx > 0 ? 1 : -1 }
+      k.x = clamp(k.x, 14, W - 14); k.y = clamp(k.y, 20, H - 10);
+    }
+    STALLS.forEach(s => { const sx = k.x - s.x, sy = k.y - (s.y - 10), sd = Math.hypot(sx, sy); if (sd < SAFE_R + 6 && sd > .01) { k.x = s.x + sx / sd * (SAFE_R + 6); k.y = s.y - 10 + sy / sd * (SAFE_R + 6) } });
+    if (k.cool > 0 || G.st || G.state !== 'play') return;
+    if (dist(k, LD) < 24 && LD.inv <= 0 && !pSafe) { startStruggle(k); return }
+    for (let i = F.length - 1; i >= 0; i--) {
+      if (dist(k, F[i]) < 18 && !inStall(F[i])) { release(F.splice(i, 1)[0], k); k.cool = k.pl ? .5 : 1.1; say(k, 'Bus mein baitho!', 1.2); if (dist(k, ME) < 500) sfx.hit(); break }
+    }
+  });
+  for (let i = 0; i < K.length; i++) for (let j = i + 1; j < K.length; j++) {
+    const a = K[i], b = K[j], dx2 = b.x - a.x, dy2 = b.y - a.y, d = Math.hypot(dx2, dy2);
+    if (d < 22 && d > .01) { const p = (22 - d) / 2; if (!a.pl) { a.x -= dx2 / d * p; a.y -= dy2 / d * p } if (!b.pl) { b.x += dx2 / d * p; b.y += dy2 / d * p } }
+  }
+  if (G.state !== 'play') return;
+
+  // dharna & clocks
+  if (sitting && !G.st) { dharna += dt; if (dharna >= DHARNA_T) { endRound(G.mode === 'protest'); return } }
+  else if (!sitting) dharna = Math.max(0, dharna - dt * 2);
+  if (police) { G.timeLeft -= dt; if (G.timeLeft <= 0) { G.timeLeft = 0; endRound(true); return } }
+  [LD, ...F, ...B, ...K].forEach(e => { if (e.say && (e.say.t -= dt) <= 0) e.say = null });
+}
+
+// ---------- render ----------
+let dpr = 1, vw = 0, vh = 0;
+function resize() { const r = cv.getBoundingClientRect(); dpr = Math.min(2, devicePixelRatio || 1); vw = r.width; vh = r.height; cv.width = Math.round(vw * dpr); cv.height = Math.round(vh * dpr) }
+addEventListener('resize', resize);
+function render() {
+  const z = Math.max(.6, Math.min(1.3, Math.min(vw / 920, vh / 580)));
+  const viewW = vw / z, viewH = vh / z, focus = ME;
+  const camX = viewW >= W ? (W - viewW) / 2 : clamp(focus.x - viewW / 2, 0, W - viewW);
+  const camY = viewH >= H ? (H - viewH) / 2 : clamp(focus.y - 20 - viewH / 2, 0, H - viewH);
+  const sx = G.shake ? rand(-5, 5) : 0, sy = G.shake ? rand(-5, 5) : 0;
+  c.setTransform(dpr, 0, 0, dpr, 0, 0); c.fillStyle = INK; c.fillRect(0, 0, vw, vh);
+  c.setTransform(dpr * z, 0, 0, dpr * z, (-camX * z + sx) * dpr, (-camY * z + sy) * dpr);
+  c.drawImage(ground, 0, 0);
+  const vis = e => e.x > camX - 120 && e.x < camX + viewW + 120 && e.y > camY - 40 && e.y < camY + viewH + 160;
+  const D = [];
+  TREES.forEach(t => vis(t) && D.push([t.y, () => tree(t)]));
+  STALLS.forEach(s => vis(s) && D.push([s.y, () => stall(s, G.t)]));
+  TENTS.forEach(t => vis(t) && D.push([t.y, () => tent(t)]));
+  BAR.forEach(b => D.push([Math.max(b.a.y, b.b.y), () => barricade(b)]));
+  D.push([1205, monument]); D.push([TEMPLE.y, temple]);
+  const sit = leaderSitting();
+  const jit = G.st ? Math.sin(G.t * 45) * 1.8 : 0;
+  B.forEach(b => vis(b) && D.push([b.y, () => person(b, b.L)]));
+  F.forEach(f => vis(f) && D.push([f.y, () => person(f, f.L, { item: f.item, sign: f.sign, fc: f.fc, sc: f.sc, sit: f.sit })]));
+  K.forEach(k => vis(k) && D.push([k.y, () => {
+    const grabbing = G.st && G.st.cop === k;
+    if (grabbing) k.face = LD.x > k.x ? 1 : -1;
+    c.globalAlpha = k.cool > 0 && !k.pl && !grabbing ? .75 : 1;
+    person(k, k.L, { item: 'lathi', grab: grabbing, jit: grabbing ? -jit : 0 });
+    c.globalAlpha = 1;
+    if (k.pl) marker(k.x, k.y, '#b5432d');
+    else if (k.chase && k.cool <= 0 && !G.st) { c.fillStyle = '#b5432d'; c.font = '16px Bungee, Impact, sans-serif'; c.textAlign = 'center'; c.fillText('!', k.x, k.y - 52) }
+  }]));
+  D.push([LD.y, () => {
+    c.globalAlpha = LD.inv > 0 && (LD.inv * 10 | 0) % 2 ? .45 : 1;
+    person(LD, LEADER, { item: 'megaphone', sit: sit && !LD.moving, jit });
+    c.globalAlpha = 1;
+    marker(LD.x, LD.y - (G.st ? 14 : 0), '#e3b23c');
+  }]);
+  D.sort((a, b) => a[0] - b[0]).forEach(d => d[1]());
+  if (ring) { c.strokeStyle = 'rgba(' + ring.col + ',' + (1 - ring.t / .45) + ')'; c.lineWidth = 5; circ(ring.x, ring.y - 20, 30 + ring.t / .45 * ring.r); c.stroke() }
+  if (dharna > 0 && !G.st) {
+    c.strokeStyle = INK; c.lineWidth = 9; circ(LD.x, LD.y - 22, 30); c.stroke();
+    c.strokeStyle = '#e3b23c'; c.lineWidth = 5; c.beginPath(); c.arc(LD.x, LD.y - 22, 30, -Math.PI / 2, -Math.PI / 2 + TAU * dharna / DHARNA_T); c.stroke();
+  }
+  if (G.st) {
+    const bw = 110, bx = LD.x - bw / 2, by = LD.y - 96, m = G.st.m / 100;
+    c.fillStyle = '#8a5a2b'; rr(bx, by, bw, 14, 7); c.fill();
+    c.save(); rr(bx, by, bw, 14, 7); c.clip(); c.fillStyle = '#6f9a2a'; c.fillRect(bx, by, bw * m, 14); c.restore();
+    c.strokeStyle = INK; c.lineWidth = 3; rr(bx, by, bw, 14, 7); c.stroke();
+    c.lineWidth = 2; line(bx + bw / 2, by - 3, bx + bw / 2, by + 17);
+  }
+  [...B, ...K, ...F, LD].forEach(e => { if (e.say && vis(e)) bubble(e.x, e.y - (e.item === 'placard' || e.item === 'flag' ? 82 : (e === LD ? 72 : 62)), e.say.text) });
+
+  // screen space
+  c.setTransform(dpr, 0, 0, dpr, 0, 0);
+  const hud = document.querySelector('.hud').getBoundingClientRect();
+  const mw = Math.min(170, vw * .3), mh = mw * H / W, mx = vw - mw - 14, my = hud.bottom + 10, ms = mw / W;
+  c.fillStyle = 'rgba(246,239,217,.94)'; rr(mx, my, mw, mh, 8); c.fill(); c.strokeStyle = INK; c.lineWidth = 3; c.stroke();
+  c.save(); rr(mx, my, mw, mh, 8); c.clip();
+  c.strokeStyle = '#b9ad88'; c.lineCap = 'round';
+  SEGS.forEach(s => { c.lineWidth = Math.max(1.5, s.w * ms); c.beginPath(); c.moveTo(mx + s.a[0] * ms, my + s.a[1] * ms); c.lineTo(mx + s.b[0] * ms, my + s.b[1] * ms); c.stroke() });
+  RINGS.forEach(rg => { c.lineWidth = Math.max(1.5, rg.w * ms); c.beginPath(); c.arc(mx + CPc.x * ms, my + CPc.y * ms, rg.r * ms, 0, TAU); c.stroke() });
+  c.fillStyle = '#c8694a'; c.fillRect(mx + COMPOUND.x * ms, my + COMPOUND.y * ms, COMPOUND.w * ms, COMPOUND.h * ms);
+  c.fillStyle = '#e3b23c'; c.fillRect(mx + ZONE.x * ms, my + ZONE.y * ms, ZONE.w * ms, ZONE.h * ms);
+  c.fillStyle = '#6f9a2a'; STALLS.forEach(s => { circ(mx + s.x * ms, my + s.y * ms, 2.5); c.fill() });
+  c.fillStyle = '#5b6b2e'; F.forEach(f => c.fillRect(mx + f.x * ms - 1, my + f.y * ms - 1, 2, 2));
+  K.forEach(k => { c.fillStyle = k.pl ? '#b5432d' : '#8a5a2b'; const s = k.pl ? 6 : 4; c.fillRect(mx + k.x * ms - s / 2, my + k.y * ms - s / 2, s, s) });
+  c.fillStyle = '#e3b23c'; c.strokeStyle = INK; c.lineWidth = 1.5; circ(mx + LD.x * ms, my + LD.y * ms, 4); c.fill(); c.stroke();
+  c.strokeStyle = 'rgba(38,45,18,.6)'; c.lineWidth = 1; c.strokeRect(mx + camX * ms, my + camY * ms, viewW * ms, viewH * ms);
+  c.restore();
+  // off-screen pointer to the leader (police) or to Jantar Mantar (protest)
+  const tgt = G.mode === 'police' ? { x: LD.x, y: LD.y - 20, l: 'LEADER' } : { x: ZONE.x + ZONE.w / 2, y: ZONE.y + ZONE.h / 2, l: 'JM' };
+  const tx = (tgt.x - camX) * z, ty = (tgt.y - camY) * z;
+  if (G.state === 'play' && (tx < 0 || tx > vw || ty < hud.bottom || ty > vh)) {
+    const cx0 = vw / 2, cy0 = (hud.bottom + vh) / 2, a = Math.atan2(ty - cy0, tx - cx0);
+    const ex = clamp(cx0 + Math.cos(a) * vw, 40, vw - 40), ey = clamp(cy0 + Math.sin(a) * vh, hud.bottom + 30, vh - 40);
+    c.save(); c.translate(ex, ey); c.rotate(a); c.fillStyle = '#e3b23c'; c.strokeStyle = INK; c.lineWidth = 3;
+    c.beginPath(); c.moveTo(18, 0); c.lineTo(-10, -13); c.lineTo(-4, 0); c.lineTo(-10, 13); c.closePath(); c.fill(); c.stroke(); c.restore();
+    c.font = '12px Bungee, Impact, sans-serif'; c.textAlign = 'center'; c.lineWidth = 4; c.strokeStyle = INK; c.strokeText(tgt.l, ex, ey + 30); c.fillStyle = CREAM; c.fillText(tgt.l, ex, ey + 30);
+  }
+  const bigText = (t, y, size, col) => { c.font = size + 'px Bungee, Impact, sans-serif'; c.textAlign = 'center'; c.textBaseline = 'middle'; c.lineWidth = 6; c.strokeStyle = INK; c.lineJoin = 'round'; c.strokeText(t, vw / 2, y); c.fillStyle = col; c.fillText(t, vw / 2, y) };
+  if (G.st) {
+    const you = playerInStruggle();
+    bigText(you ? (coarse ? 'TAP TAP TAP!' : 'MASH SPACE!') : 'CONSTABLE HAS HIM!', hud.bottom + 46, Math.min(34, vw / 12), '#e3b23c');
+    c.font = '700 15px Hind, sans-serif'; c.lineWidth = 4; c.strokeText(`Kafila pull +${G.st.kafila | 0}   ·   Police backup −${G.st.helpers | 0}`, vw / 2, hud.bottom + 78);
+    c.fillStyle = CREAM; c.fillText(`Kafila pull +${G.st.kafila | 0}   ·   Police backup −${G.st.helpers | 0}`, vw / 2, hud.bottom + 78);
+  } else if (G.banner) bigText(G.banner.text, hud.bottom + 50, Math.min(28, vw / 16), CREAM);
+  if (joy) {
+    c.strokeStyle = 'rgba(246,239,217,.8)'; c.lineWidth = 3; circ(joy.ox, joy.oy, 50); c.stroke();
+    const jx = joy.x - joy.ox, jy = joy.y - joy.oy, l = Math.hypot(jx, jy), k = l > 50 ? 50 / l : 1;
+    c.fillStyle = 'rgba(227,178,60,.9)'; circ(joy.ox + jx * k, joy.oy + jy * k, 20); c.fill(); c.strokeStyle = INK; c.stroke();
+  }
+}
+
+// ---------- HUD ----------
+const hudCache = {};
+function setText(id, t) { if (hudCache[id] !== t) { hudCache[id] = t; $(id).textContent = t } }
+function hudUpdate() {
+  const police = G.mode === 'police';
+  setText('hRound', (police ? 'Police · R' : 'Round ') + G.round);
+  setText('hKafila', (police ? 'Their kafila ' : 'Kafila ') + F.length + '/' + need);
+  if (police) { const s = Math.ceil(G.timeLeft); setText('hThird', 'Time ' + (s / 60 | 0) + ':' + String(s % 60).padStart(2, '0')) }
+  else setText('hThird', 'Chances ' + '●'.repeat(Math.max(0, G.chances)) + '○'.repeat(3 - Math.max(0, G.chances)));
+  $('hStam').style.width = ME.stam + '%';
+  const inZone = inRect(LD, ZONE), sitting = leaderSitting(), st = $('hStatus');
+  let s, cls = '';
+  if (G.st) { s = playerInStruggle() ? (police ? 'Mash Space! Hold him!' : 'Mash Space! Break free!') : 'Constable grabbed the leader'; cls = 'alarm' }
+  else if (police) {
+    if (sitting) { s = 'Dharna on! ' + Math.max(0, DHARNA_T - dharna).toFixed(1) + 's. Grab the leader!'; cls = 'alarm' }
+    else if (F.length >= need) { s = 'Kafila ready, heading to Jantar Mantar'; cls = 'hot' }
+    else if (inStall(LD)) s = 'Leader hiding at a chai stall';
+    else s = 'Grab the leader (yellow marker)';
+  } else {
+    if (sitting) { s = 'Dharna on! ' + Math.max(0, DHARNA_T - dharna).toFixed(1) + 's to go'; cls = 'hot' }
+    else if (inZone) s = 'Need ' + (need - F.length) + ' more to sit';
+    else if (F.length < need) s = 'Recruit ' + (need - F.length) + ' more';
+    else s = 'Kafila ready! Down Sansad Marg to Jantar Mantar';
+    if (inStall(LD) && !sitting) s = 'Chai break. Police can\'t enter';
+  }
+  setText('hStatus', s); st.className = 'chip status' + (cls ? ' ' + cls : '');
+  const bA = $('bA'), lab = G.st && playerInStruggle() ? 'ZOR!' : (police ? 'SEETI' : 'NARA!');
+  if (bA.textContent !== lab) bA.textContent = lab;
+}
+
+// ---------- loop ----------
+let last = performance.now();
+function frame(t) {
+  const dt = Math.min(.05, (t - last) / 1000); last = t;
+  if (G.state === 'play') step(dt); else G.t += dt;
+  render(); hudUpdate();
+  requestAnimationFrame(frame);
+}
+resize(); buildGround(); menu();
+if (document.fonts) document.fonts.ready.then(buildGround);
+requestAnimationFrame(frame);
+})();
+</script>
+</body>
+</html>
